@@ -1,16 +1,17 @@
 import telegram
 import logging
 import db
+from random import getrandbits
 
 # Some structure that gives data.
 from ClientsData import make_test_client
 
 '''
-Change for other bot:
-:telegram_token:
-    Your token
-:db_conn_str:
-    something like "sqlite:///__secret\\bot.db"
+Change to run your own bot:
+    :telegram_token:
+        Your token
+    :db_conn_str:
+        A connection string for a database (see example below)
 '''
 
 try:
@@ -18,7 +19,7 @@ try:
     from __secret.ini import db_conn_str
 except ImportError:
     telegram_token = 'TOKEN'
-    db_conn_str = 'sqlite:///__secret\\bot.db'
+    db_conn_str = 'sqlite:///bot.db'
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -77,6 +78,19 @@ class cCommandEnv:
             return
         bot.sendMessage(update.message.chat_id, text='Secret data !')
 
+    def inlinequery(self, bot, update):
+        if update.inline_query is not None and update.inline_query.query:
+            query = update.inline_query.query
+            results = []
+            Ar = telegram.InlineQueryResultArticle
+            results += [Ar(id=hex(getrandbits(64))[2:],
+                           title='secret 1',
+                           message_text='This is a very high secret!')]
+            results += [Ar(id=hex(getrandbits(64))[2:],
+                           title='secret 2',
+                           message_text='This is TOP secret!')]
+            bot.answerInlineQuery(update.inline_query.id, results=results)
+
 ######################################
 # Basic commands #####################
 ######################################
@@ -118,6 +132,9 @@ def main(token):
     dp.addUnknownTelegramCommandHandler(unknown_command)
     # dp.addTelegramMessageHandler(message)
     dp.addTelegramRegexHandler("^\?.*", env.search)
+
+    dp.addTelegramInlineHandler(env.inlinequery)
+
     # dp.addUnknownStringCommandHandler(unknown_cli_command)
     # dp.addStringRegexHandler('^?', env.search)
     # log all errors

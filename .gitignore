@@ -225,3 +225,4 @@ pip-log.txt
 # Secrets
 __secret/
 __old/
+*.db
