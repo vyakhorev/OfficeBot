@@ -33,6 +33,16 @@ class cUser(BASE, abst_key):
     def __repr__(self):
         return self.telegram_name
 
+class cChat(BASE, abst_key):
+    __tablename__ = "chat"
+    rec_id = sa.Column(sa.Integer, primary_key=True)
+    chat_id = sa.Column(sa.String(255))
+    user_rec_id = sa.Column(sa.Integer, sa.ForeignKey('user.rec_id'))
+    user = sa.orm.relationship("cUser")
+
+    def __repr__(self):
+        return self.telegram_name
+
 class c_database_handler:
     def __init__(self, db_conn_str):
         self.engine = sa.create_engine(db_conn_str, echo=False, encoding='utf-8')
@@ -80,8 +90,12 @@ class c_database_handler:
 # FUNCTIONS
 ############
 
+
 def check_for_user(sess, user_tele_id):
     if sess.query(cUser).filter_by(telegram_id=user_tele_id).count() > 0:
         return True
     return False
+
+def get_all_chats(sess):
+    return sess.query(cChat).all()
 

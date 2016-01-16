@@ -51,12 +51,19 @@ class cCommandEnv:
             return
         # TODO: mechanics for registering
         bot.sendMessage(update.message.chat_id, text='Doing registration')
+        # create user
         usr = db.cUser()
         usr.telegram_id = update.message.from_user.id
         usr.telegram_name = update.message.from_user.first_name
+        # create chat_id
+        chat = db.cChat()
+        chat.chat_id = update.message.chat_id
+        chat.user = usr
+        #
         self.db_hand.add_object_to_session(usr)
-        bot.sendMessage(update.message.chat_id, text='Registration is done')
+        self.db_hand.add_object_to_session(chat)
         self.db_hand.commit_and_close_session()
+        bot.sendMessage(update.message.chat_id, text='Registration is done')
 
     def search(self, bot, update):
         txt = update.message.text[1:]
@@ -95,7 +102,6 @@ class cCommandEnv:
 # Basic commands #####################
 ######################################
 
-
 def unknown_command(bot, update):
     bot.sendMessage(update.message.chat_id, text='Command not recognized!')
 
@@ -109,42 +115,88 @@ def start(bot, update):
     bot.sendMessage(update.message.chat_id, text='Wrong one!')
 
 ######################################
+# Schedule ###########################
+######################################
+
+from pytz import utc
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.executors.pool import ProcessPoolExecutor
+
+class cSchedEnv():
+    def __init__(self):
+        jobstores = {
+            'default': SQLAlchemyJobStore(url='sqlite:///jobs.db')
+        }
+        executors = {
+            'default': {'type': 'threadpool', 'max_workers': 20},
+            'processpool': ProcessPoolExecutor(max_workers=5)
+        }
+        job_defaults = {
+            'coalesce': False,
+            'max_instances': 1
+        }
+        self.the_sched = BackgroundScheduler()
+        self.the_sched.configure(jobstores=jobstores, executors=executors, job_defaults=job_defaults, timezone=utc)
+        self.telegram_chats = []
+
+    def start(self):
+        self.the_sched.start()
+
+    def set_telegram_job_queue(self, job_queue):
+        self.job_queue = job_queue
+
+    def set_chats(self, chat_list):
+        for ch_i in chat_list:
+            self.telegram_chats += [ch_i.chat_id]
+
+    def add_task_telegram_reminder(self, msg):
+        # reminds every user about something
+        self.job_queue.put(self._telegram_job_reminder, 5, repeat=False)
+
+    def _telegram_job_reminder(self, bot):
+        for chat_id in self.telegram_chats:
+            bot.sendMessage(chat_id, "some stupid reminder from a bad structured code")
+
+
+
+######################################
 # MAIN ###############################
 ######################################
 
 def main(token):
-    # init db with alchemy
+    # init user db with alchemy
     db_handler = db.c_database_handler(db_conn_str)
     data_handler = make_test_client()
 
+    # init command environment
     env = cCommandEnv(db_handler, data_handler)
 
     updater = telegram.Updater(token, workers=10)
     job_queue = updater.job_queue
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
+
+    ######
+    sch = cSchedEnv()
+    sch.set_telegram_job_queue(job_queue)
+    sch.add_task_telegram_reminder("reminder from global scheduler")
+    sch.set_chats(db.get_all_chats(db_handler.get_active_session()))
+    ######
+
     # on different commands - answer in Telegram
     dp.addTelegramCommandHandler("start", start)
     dp.addTelegramCommandHandler("register", env.register)
     dp.addTelegramCommandHandler("secret", env.secret)
     dp.addTelegramCommandHandler("clients", env.clients)
-
     dp.addUnknownTelegramCommandHandler(unknown_command)
-    # dp.addTelegramMessageHandler(message)
     dp.addTelegramRegexHandler("^\?.*", env.search)
-
     dp.addTelegramInlineHandler(env.inlinequery)
-
-    # dp.addUnknownStringCommandHandler(unknown_cli_command)
-    # dp.addStringRegexHandler('^?', env.search)
-    # log all errors
     dp.addErrorHandler(error)
     # Start the Bot
     updater.start_polling()
-    # Block until the you presses Ctrl-C or the process receives SIGINT,
-    # SIGTERM or SIGABRT. This should be used most of the time, since
-    # start_polling() is non-blocking and will stop the bot gracefully.
     updater.idle()
+
 
 if __name__ == '__main__':
     main(telegram_token)
