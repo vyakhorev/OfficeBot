@@ -13,7 +13,7 @@ class cDataRequester:
         clients = {}
         for cl_i in clients_alliases:
             temp_cl = Client(cl_i)
-            temp_data = ' '.join([choice(some_data) for i in range(randint(6,12))])
+            temp_data = ' '.join([choice(some_data) for i in range(randint(6, 12))])
             temp_cl.set_data(temp_data)
             clients[cl_i] = temp_cl
 
@@ -30,3 +30,4 @@ class Client:
 
     def get_data(self):
         return self.data
+
